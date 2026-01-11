@@ -10,10 +10,8 @@ RWSEStudy/
 │   ├── integrate.py           # Main integration script
 │   └── generate_sample_data.py # Generate synthetic test data
 ├── data/                       # Data files
-│   ├── sample_data.xlsx       # Generated sample data
 │   └── data_dictionary_codebook.xlsx  # REDCap codebook
 ├── documentation/              # Project documentation
-├── past_versions/             # Archived previous versions
 ├── requirements.txt           # Python dependencies
 └── README.md                  # This file
 ```
@@ -124,13 +122,6 @@ The `generate_sample_data.py` script creates realistic synthetic data with:
 - **Data Dictionary:** `data/data_dictionary_codebook.xlsx`
 - **Protocol Details:** `documentation/Protocol.docx`
 - **Data Structure Reports:** `documentation/*.md`
-
-## Previous Versions
-
-Archived versions are in `past_versions/`. The current version includes:
-- Correct questionnaire-timepoint mapping
-- `_r` timepoint consolidation
-- `dosing_rescheduled` tracking column
 
 ---
 
