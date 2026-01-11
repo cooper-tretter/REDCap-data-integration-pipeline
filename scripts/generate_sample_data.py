@@ -107,10 +107,18 @@ QUESTIONNAIRES = {
         'completion_rate': 0.80, 'higher_is_worse': False,
     },
     'auditc': {
-        'name': 'AUDIT-C (Alcohol Use)',
+        'name': 'AUDIT-C (Alcohol Use - Short)',
         'items': 3, 'item_range': (0, 4), 'total_range': (0, 12),
         'scoring': 'sum', 'timepoints': [1, 3, 4, 5, 6],
         'completion_rate': 0.80, 'higher_is_worse': True,
+    },
+    'audit_remaining': {
+        'name': 'AUDIT (Remaining Items 4-10)',
+        'items': 7, 'item_range': (0, 4), 'total_range': (0, 28),
+        'scoring': 'sum', 'timepoints': [1, 3, 4, 5, 6],
+        'completion_rate': 0.40,  # Only ~40% complete the full version
+        'higher_is_worse': True,
+        'conditional_on': 'auditc',  # Only generate if AUDIT-C was completed
     },
 
     # === DOSING SESSION MEASURES (t2 only) ===
@@ -684,9 +692,51 @@ def generate_realistic_data():
                 row['email'] = f"{first_name.lower()}.{last_name.lower()}@example.com"
                 row['consent_date'] = (datetime.now() - timedelta(days=random.randint(30, 180))).strftime('%m/%d/%y')
 
+            # Track which questionnaires were completed for conditional logic
+            completed_questionnaires = set()
+
             # Generate scores for all questionnaires at this timepoint
             for q_key, q_info in QUESTIONNAIRES.items():
                 if logical_tp not in q_info['timepoints']:
+                    continue
+
+                # Skip conditional questionnaires for now (handled below)
+                if 'conditional_on' in q_info:
+                    continue
+
+                total_score = generate_score_for_questionnaire(
+                    q_key, logical_tp, baseline_phq9, is_responder, profile_name
+                )
+
+                if total_score is None:
+                    continue
+
+                completed_questionnaires.add(q_key)
+
+                # Generate individual items
+                items = generate_items_from_total(
+                    total_score, q_info['items'],
+                    q_info['item_range'][0], q_info['item_range'][1]
+                )
+
+                for i, val in enumerate(items, 1):
+                    row[f'{q_key}_{i}'] = val
+
+                # Store total score
+                if q_info['scoring'] == 'mean':
+                    row[f'{q_key}_mean'] = round(sum(items) / len(items), 2)
+                else:
+                    row[f'{q_key}_total'] = sum(items)
+
+            # Handle conditional questionnaires (like audit_remaining)
+            for q_key, q_info in QUESTIONNAIRES.items():
+                if 'conditional_on' not in q_info:
+                    continue
+                if logical_tp not in q_info['timepoints']:
+                    continue
+
+                # Only generate if the prerequisite was completed
+                if q_info['conditional_on'] not in completed_questionnaires:
                     continue
 
                 total_score = generate_score_for_questionnaire(
@@ -702,10 +752,14 @@ def generate_realistic_data():
                     q_info['item_range'][0], q_info['item_range'][1]
                 )
 
-                for i, val in enumerate(items, 1):
-                    row[f'{q_key}_{i}'] = val
+                # Special naming for audit_remaining: use audit_4 through audit_10
+                if q_key == 'audit_remaining':
+                    for i, val in enumerate(items, 4):  # Start at 4
+                        row[f'audit_{i}'] = val
+                else:
+                    for i, val in enumerate(items, 1):
+                        row[f'{q_key}_{i}'] = val
 
-                # Store total score
                 if q_info['scoring'] == 'mean':
                     row[f'{q_key}_mean'] = round(sum(items) / len(items), 2)
                 else:

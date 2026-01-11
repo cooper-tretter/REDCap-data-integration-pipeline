@@ -78,9 +78,16 @@ QUESTIONNAIRES = {
         'higher_is_worse': False,
     },
     'auditc': {
-        'name': 'AUDIT-C (Alcohol Use)', 'items': 3, 'item_range': (0, 4),
+        'name': 'AUDIT-C (Alcohol Use - Short)', 'items': 3, 'item_range': (0, 4),
         'total_range': (0, 12), 'scoring': 'sum', 'timepoints': [1, 3, 4, 5, 6],
         'higher_is_worse': True,
+        'short_version_of': 'audit_full',
+    },
+    'audit_full': {
+        'name': 'AUDIT (Alcohol Use - Full)', 'items': 10, 'item_range': (0, 4),
+        'total_range': (0, 40), 'scoring': 'sum', 'timepoints': [1, 3, 4, 5, 6],
+        'higher_is_worse': True,
+        'item_prefix': 'audit',  # Items 1-3 are auditc_1-3, items 4-10 are audit_4-10
     },
 
     # === DOSING SESSION MEASURES ===
@@ -505,12 +512,23 @@ def pivot_time_varying(df):
 
     # Build list of all questionnaire item columns
     for q_key, q_info in QUESTIONNAIRES.items():
+        # Special handling for audit_full - items are named differently
+        if q_key == 'audit_full':
+            # audit_full items 1-3 are auditc_1-3 (already added)
+            # audit_full items 4-10 are audit_4 through audit_10
+            for i in range(4, 11):
+                time_varying.append(f'audit_{i}')
+            continue
+
         for i in range(1, q_info['items'] + 1):
             time_varying.append(f'{q_key}_{i}')
         if q_info['scoring'] == 'mean':
             time_varying.append(f'{q_key}_mean')
         else:
             time_varying.append(f'{q_key}_total')
+
+    # Also add audit_remaining_total if it exists
+    time_varying.append('audit_remaining_total')
 
     time_varying.extend(['treatment_date', 'treatment_status'])
 
@@ -553,6 +571,41 @@ def calculate_all_scores(df):
 
         for q_key, q_info in QUESTIONNAIRES.items():
             if tp_num not in q_info['timepoints']:
+                continue
+
+            # Special handling for AUDIT full (combines auditc_1-3 and audit_4-10)
+            if q_key == 'audit_full':
+                auditc_items = [f'auditc_{i}_{tp}' for i in range(1, 4)]
+                audit_items = [f'audit_{i}_{tp}' for i in range(4, 11)]
+                all_items = auditc_items + audit_items
+
+                # Check if AUDIT-C items exist
+                has_auditc = all(c in df.columns for c in auditc_items)
+                # Check if remaining AUDIT items exist
+                has_audit_remaining = all(c in df.columns for c in audit_items)
+
+                if has_auditc and has_audit_remaining:
+                    # Calculate full AUDIT score
+                    df[f'audit_full_total_{tp}'] = df.apply(lambda row: calc_sum(row, all_items), axis=1)
+                    # Add version indicator
+                    df[f'audit_version_{tp}'] = df.apply(
+                        lambda row: 'full' if pd.notna(calc_sum(row, audit_items)) else
+                                   ('short' if pd.notna(calc_sum(row, auditc_items)) else np.nan),
+                        axis=1
+                    )
+                elif has_auditc:
+                    # Only short version available
+                    df[f'audit_version_{tp}'] = df.apply(
+                        lambda row: 'short' if pd.notna(calc_sum(row, auditc_items)) else np.nan,
+                        axis=1
+                    )
+                continue
+
+            # Skip auditc here since we handle it in the audit_full block
+            if q_key == 'auditc':
+                items = [f'{q_key}_{i}_{tp}' for i in range(1, q_info['items'] + 1)]
+                if all(c in df.columns for c in items):
+                    df[f'{q_key}_total_{tp}'] = df.apply(lambda row: calc_sum(row, items), axis=1)
                 continue
 
             items = [f'{q_key}_{i}_{tp}' for i in range(1, q_info['items'] + 1)]
