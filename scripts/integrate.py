@@ -21,7 +21,6 @@ IMPORTANT: _r timepoint consolidation
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from datetime import datetime
 import warnings
 import sys
 warnings.filterwarnings('ignore')
@@ -881,8 +880,7 @@ def integrate_full(input_path, output_dir=None):
     df_calculations = create_calculations_tab()
 
     print("\n9. Saving outputs...")
-    timestamp = datetime.now().strftime("%Y%m%d_T%H%M%S")
-    excel_output = output_dir / f'insights_{timestamp}.xlsx'
+    excel_output = output_dir / 'insights.xlsx'
 
     with pd.ExcelWriter(excel_output, engine='openpyxl') as writer:
         df_wide.to_excel(writer, sheet_name='Main Data', index=False)
@@ -909,7 +907,7 @@ def integrate_full(input_path, output_dir=None):
 
     print(f"   - Saved: {excel_output}")
 
-    csv_output = output_dir / f'insights_{timestamp}.csv'
+    csv_output = output_dir / 'insights.csv'
     df_wide.to_csv(csv_output, index=False)
     print(f"   - Saved: {csv_output}")
 

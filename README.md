@@ -6,17 +6,17 @@ Transform messy REDCap exports into clean, analysis-ready datasets for the PATH 
 
 ```
 RWSEStudy/
-├── scripts/                    # Main processing scripts
-│   ├── integrate.py           # Main integration script
+├── scripts/
+│   ├── integrate.py            # Main integration script
 │   └── generate_sample_data.py # Generate synthetic test data
-├── data/                       # Data files
-│   ├── sample_data.xlsx       # Generated sample data for testing
-│   ├── insights.xlsx          # Integration output (Excel with multiple tabs)
-│   ├── insights.csv           # Integration output (CSV, main data only)
-│   └── data_dictionary_codebook.xlsx  # REDCap codebook
-├── documentation/              # Project documentation
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+├── data/
+│   ├── sample_data.xlsx        # Synthetic REDCap export (120 participants, long format)
+│   ├── insights.xlsx           # Integration output with 11 analytical tabs
+│   ├── insights.csv            # Integration output (main data tab only)
+│   └── data_dictionary_codebook.xlsx  # REDCap codebook with all 72 instruments
+├── documentation/              # Protocol, data structure reports, meeting notes
+├── requirements.txt            # Python dependencies
+└── README.md
 ```
 
 ## Quick Start
@@ -36,7 +36,7 @@ python scripts/generate_sample_data.py
 python scripts/integrate.py data/sample_data.xlsx
 ```
 
-This creates `insights_[timestamp].xlsx` with multiple analytical tabs.
+This creates `insights.xlsx` with multiple analytical tabs.
 
 ## Key Features
 
