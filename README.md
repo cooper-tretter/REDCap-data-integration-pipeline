@@ -10,6 +10,9 @@ RWSEStudy/
 │   ├── integrate.py           # Main integration script
 │   └── generate_sample_data.py # Generate synthetic test data
 ├── data/                       # Data files
+│   ├── sample_data.xlsx       # Generated sample data for testing
+│   ├── insights.xlsx          # Integration output (Excel with multiple tabs)
+│   ├── insights.csv           # Integration output (CSV, main data only)
 │   └── data_dictionary_codebook.xlsx  # REDCap codebook
 ├── documentation/              # Project documentation
 ├── requirements.txt           # Python dependencies

@@ -39,11 +39,6 @@ env/
 .LSOverride
 ._*
 
-# Output files - keep structure but not generated files
-data/insights_*.xlsx
-data/insights_*.csv
-data/sample_data.xlsx
-
 # Past versions (archived, not needed in repo)
 past_versions/
 
