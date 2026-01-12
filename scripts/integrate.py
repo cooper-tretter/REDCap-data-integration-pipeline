@@ -30,6 +30,7 @@ warnings.filterwarnings('ignore')
 # TIMEPOINT MAPPING
 # =============================================================================
 
+# Internal timepoint mapping (REDCap event names to internal codes)
 TIMEPOINT_MAP = {
     'timepoint_1_arm_1': 't1',
     'timepoint_2_arm_1': 't2',
@@ -45,6 +46,17 @@ TIMEPOINT_MAP = {
 }
 
 TIMEPOINT_ORDER = ['t1', 't2', 't3', 't4', 't5', 't6']
+
+# Output timepoint labels (for insights output only)
+# Per protocol: t1=baseline, t2=3 days, t3=1 month, t4=3 months, t5=6 months, t6=12 months
+OUTPUT_TIMEPOINT_LABELS = {
+    't1': 'bl',    # Baseline (pre-intervention)
+    't2': '3d',    # 3 days post-treatment
+    't3': '1mo',   # 1 month post-treatment
+    't4': '3mo',   # 3 months post-treatment
+    't5': '6mo',   # 6 months post-treatment
+    't6': '12mo',  # 12 months post-treatment
+}
 
 
 # =============================================================================
@@ -879,7 +891,65 @@ def integrate_full(input_path, output_dir=None):
 
     df_calculations = create_calculations_tab()
 
-    print("\n9. Saving outputs...")
+    print("\n9. Renaming timepoint columns for output...")
+    # Rename columns: _t1 -> _bl, _t2 -> _3d, _t3 -> _1mo, etc.
+    def rename_timepoint_columns(df):
+        rename_map = {}
+        for col in df.columns:
+            new_col = col
+            for internal, output in OUTPUT_TIMEPOINT_LABELS.items():
+                # Replace _t1, _t2, etc. at end of column names
+                if col.endswith(f'_{internal}'):
+                    new_col = col[:-len(f'_{internal}')] + f'_{output}'
+                    break
+            if new_col != col:
+                rename_map[col] = new_col
+        return df.rename(columns=rename_map)
+
+    # Also update the 'timepoints' column values
+    def rename_timepoints_value(val):
+        if pd.isna(val):
+            return val
+        result = str(val)
+        for internal, output in OUTPUT_TIMEPOINT_LABELS.items():
+            result = result.replace(internal, output)
+        return result
+
+    df_wide = rename_timepoint_columns(df_wide)
+    if 'timepoints' in df_wide.columns:
+        df_wide['timepoints'] = df_wide['timepoints'].apply(rename_timepoints_value)
+
+    df_summary = rename_timepoint_columns(df_summary)
+    df_completeness = rename_timepoint_columns(df_completeness)
+    if 'Timepoint' in df_completeness.columns:
+        df_completeness['Timepoint'] = df_completeness['Timepoint'].apply(rename_timepoints_value)
+
+    df_phq9_summary = rename_timepoint_columns(df_phq9_summary)
+    if 'Timepoint' in df_phq9_summary.columns:
+        df_phq9_summary['Timepoint'] = df_phq9_summary['Timepoint'].apply(rename_timepoints_value)
+    df_phq9_outcomes = rename_timepoint_columns(df_phq9_outcomes)
+    if 'Comparison' in df_phq9_outcomes.columns:
+        df_phq9_outcomes['Comparison'] = df_phq9_outcomes['Comparison'].apply(rename_timepoints_value)
+
+    df_gad7_summary = rename_timepoint_columns(df_gad7_summary)
+    if 'Timepoint' in df_gad7_summary.columns:
+        df_gad7_summary['Timepoint'] = df_gad7_summary['Timepoint'].apply(rename_timepoints_value)
+    df_gad7_outcomes = rename_timepoint_columns(df_gad7_outcomes)
+    if 'Comparison' in df_gad7_outcomes.columns:
+        df_gad7_outcomes['Comparison'] = df_gad7_outcomes['Comparison'].apply(rename_timepoints_value)
+
+    df_who5_summary = rename_timepoint_columns(df_who5_summary)
+    if 'Timepoint' in df_who5_summary.columns:
+        df_who5_summary['Timepoint'] = df_who5_summary['Timepoint'].apply(rename_timepoints_value)
+    df_who5_outcomes = rename_timepoint_columns(df_who5_outcomes)
+    if 'Comparison' in df_who5_outcomes.columns:
+        df_who5_outcomes['Comparison'] = df_who5_outcomes['Comparison'].apply(rename_timepoints_value)
+
+    # Update calculations tab timepoints
+    if 'Timepoints' in df_calculations.columns:
+        df_calculations['Timepoints'] = df_calculations['Timepoints'].apply(rename_timepoints_value)
+
+    print("\n10. Saving outputs...")
     excel_output = output_dir / 'insights.xlsx'
 
     with pd.ExcelWriter(excel_output, engine='openpyxl') as writer:

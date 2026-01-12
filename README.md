@@ -40,19 +40,30 @@ This creates `insights.xlsx` with multiple analytical tabs.
 
 ## Key Features
 
-### Questionnaire-Timepoint Mapping (Per Protocol)
+### Timepoint Labels (Per Protocol)
+
+| Label | Timepoint | Description |
+|-------|-----------|-------------|
+| `bl` | Baseline | Pre-intervention (within 2 weeks before treatment) |
+| `3d` | 3 days | Acute (3 days post-treatment) |
+| `1mo` | 1 month | Subacute follow-up |
+| `3mo` | 3 months | Long-term follow-up |
+| `6mo` | 6 months | Long-term follow-up |
+| `12mo` | 12 months | Long-term follow-up |
+
+### Questionnaire-Timepoint Mapping
 
 | Questionnaire | Timepoints |
 |--------------|------------|
-| PHQ-9, GAD-7, WHO-5, PsyFlex, AUDIT-C | t1, t3, t4, t5, t6 (NOT t2) |
-| MEQ-4, EBI, CEQ, PIQ | t2 only (dosing session) |
-| Expectancy | t1 only (baseline) |
+| PHQ-9, GAD-7, WHO-5, PsyFlex, AUDIT-C | bl, 1mo, 3mo, 6mo, 12mo (NOT 3d) |
+| MEQ-4, EBI, CEQ, PIQ | 3d only (dosing session) |
+| Expectancy | bl only (baseline) |
 
 ### Rescheduled Dosing Sessions (_r Timepoints)
 
-- `_r` timepoints indicate the dosing session was rescheduled
+- `_r` timepoints in REDCap indicate the dosing session was rescheduled
 - Participants either have ALL `_r` timepoints OR ALL standard timepoints
-- Data is consolidated: `t2_r` data feeds into `t2` columns
+- Data is consolidated into the same output columns (e.g., `_3d`)
 - `dosing_rescheduled` column tracks which participants had rescheduled sessions
 
 ### Data Transformation
@@ -62,7 +73,7 @@ This creates `insights.xlsx` with multiple analytical tabs.
 **Output:** Wide-format analysis file (one row per participant) with:
 - Calculated questionnaire scores
 - Severity classifications
-- Timepoint-specific columns (e.g., `phq9_total_t1`, `phq9_total_t3`)
+- Timepoint-specific columns (e.g., `phq9_total_bl`, `phq9_total_1mo`)
 - `dosing_rescheduled` flag
 
 ### Output Tabs (Excel)
@@ -82,15 +93,15 @@ This creates `insights.xlsx` with multiple analytical tabs.
 
 | Measure | Description | Range | Timepoints |
 |---------|-------------|-------|------------|
-| PHQ-9 | Depression severity | 0-27 | t1, t3-t6 |
-| GAD-7 | Anxiety severity | 0-21 | t1, t3-t6 |
-| WHO-5 | Wellbeing index | 0-100 | t1, t3-t6 |
-| PsyFlex | Psychological flexibility | 6-30 | t1, t3-t6 |
-| AUDIT-C | Alcohol use | 0-12 | t1, t3-t6 |
-| MEQ-4 | Mystical experience | 0-5 (mean) | t2 only |
-| EBI | Emotional breakthrough | 0-30 | t2 only |
-| PIQ | Psychological insight | 9-45 | t2 only |
-| CEQ | Challenging experience | 0-35 | t2 only |
+| PHQ-9 | Depression severity | 0-27 | bl, 1mo, 3mo, 6mo, 12mo |
+| GAD-7 | Anxiety severity | 0-21 | bl, 1mo, 3mo, 6mo, 12mo |
+| WHO-5 | Wellbeing index | 0-100 | bl, 1mo, 3mo, 6mo, 12mo |
+| PsyFlex | Psychological flexibility | 6-30 | bl, 1mo, 3mo, 6mo, 12mo |
+| AUDIT-C | Alcohol use | 0-12 | bl, 1mo, 3mo, 6mo, 12mo |
+| MEQ-4 | Mystical experience | 0-5 (mean) | 3d only |
+| EBI | Emotional breakthrough | 0-30 | 3d only |
+| PIQ | Psychological insight | 9-45 | 3d only |
+| CEQ | Challenging experience | 0-35 | 3d only |
 
 ## Requirements
 
