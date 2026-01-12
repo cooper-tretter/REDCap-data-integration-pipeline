@@ -949,6 +949,52 @@ def integrate_full(input_path, output_dir=None):
     if 'Timepoints' in df_calculations.columns:
         df_calculations['Timepoints'] = df_calculations['Timepoints'].apply(rename_timepoints_value)
 
+    # Reorder columns: short questionnaire columns before long questionnaire columns
+    def reorder_short_long_columns(df):
+        """Reorder columns so short questionnaire versions come before long versions."""
+        cols = list(df.columns)
+
+        # Define short/long column patterns
+        # Short version columns (should come first)
+        short_patterns = ['auditc_']
+        # Long version columns (should come after short)
+        long_patterns = ['audit_4', 'audit_5', 'audit_6', 'audit_7', 'audit_8',
+                        'audit_9', 'audit_10', 'audit_remaining', 'audit_full', 'audit_version']
+
+        # Separate columns into categories
+        non_questionnaire = []  # record_id, demographics, etc.
+        short_cols = []
+        long_cols = []
+        other_questionnaire = []
+
+        for col in cols:
+            is_short = any(col.startswith(p) for p in short_patterns)
+            is_long = any(col.startswith(p) for p in long_patterns)
+
+            if is_short:
+                short_cols.append(col)
+            elif is_long:
+                long_cols.append(col)
+            elif any(col.startswith(f'{q}_') for q in QUESTIONNAIRES.keys() if q not in ['auditc', 'audit_full']):
+                other_questionnaire.append(col)
+            else:
+                non_questionnaire.append(col)
+
+        # Rebuild column order: non-questionnaire, other questionnaires, short, long
+        new_order = non_questionnaire + other_questionnaire + short_cols + long_cols
+
+        # Only include columns that exist
+        new_order = [c for c in new_order if c in df.columns]
+
+        # Add any columns we might have missed
+        for c in cols:
+            if c not in new_order:
+                new_order.append(c)
+
+        return df[new_order]
+
+    df_wide = reorder_short_long_columns(df_wide)
+
     print("\n10. Saving outputs...")
     excel_output = output_dir / 'insights.xlsx'
 
