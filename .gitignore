@@ -42,6 +42,11 @@ env/
 # Past versions (archived, not needed in repo)
 past_versions/
 
+# Actual participant data (not for repo)
+data/ActualExampleData.csv
+data/actual_insights.xlsx
+data/actual_insights.csv
+
 # Claude Code
 .claude/
 
