@@ -56,3 +56,6 @@ data/actual_insights.csv
 
 # Logs
 *.log
+
+# Generated reports
+reports/
