@@ -7,15 +7,24 @@ Transform messy REDCap exports into clean, analysis-ready datasets for the PATH 
 ```
 RWSEStudy/
 ├── scripts/
-│   ├── integrate.py            # Main integration script
-│   └── generate_sample_data.py # Generate synthetic test data
+│   ├── integrate.py                # Main integration script
+│   ├── generate_sample_data.py     # Generate synthetic test data
+│   ├── generate_individual_report.py  # Generate individual participant PDF reports
+│   └── generate_clinic_report.py   # Generate clinic quarterly PDF reports
 ├── data/
-│   ├── sample_data.xlsx        # Synthetic REDCap export (120 participants, long format)
-│   ├── insights.xlsx           # Integration output with 11 analytical tabs
-│   ├── insights.csv            # Integration output (main data tab only)
+│   ├── sample_data.xlsx            # Synthetic REDCap export (120 participants, long format)
+│   ├── insights.xlsx               # Integration output with 11 analytical tabs
+│   ├── insights.csv                # Integration output (main data tab only)
 │   └── data_dictionary_codebook.xlsx  # REDCap codebook with all 72 instruments
-├── documentation/              # Protocol, data structure reports, meeting notes
-├── requirements.txt            # Python dependencies
+├── reports/
+│   ├── individual_report_example_1mo.pdf  # Example 1-month individual report
+│   ├── individual_report_example_6mo.pdf  # Example 6-month individual report
+│   ├── clinic_report_Q2_example.pdf       # Example Q2 clinic report
+│   ├── clinic_report_Q4_example.pdf       # Example Q4 clinic report
+│   └── PATHLogo.png                       # PATH Lab logo for reports
+├── documentation/                  # Protocol, data structure reports, meeting notes
+├── PATH_Lab_Style_Guide.pdf        # Brand guidelines
+├── requirements.txt                # Python dependencies
 └── README.md
 ```
 
@@ -109,6 +118,7 @@ This creates `insights.xlsx` with multiple analytical tabs.
 - pandas >= 1.5.0
 - numpy >= 1.21.0
 - openpyxl >= 3.0.0
+- matplotlib >= 3.5.0 (for report generation)
 
 ## Usage Examples
 
@@ -130,6 +140,31 @@ The `generate_sample_data.py` script creates realistic synthetic data with:
 - Mystical experiences correlating with outcomes
 - 15% with rescheduled dosing sessions (all `_r` timepoints)
 - Correct questionnaire-timepoint mapping per protocol
+
+## Report Generation
+
+Generate PDF reports for individuals and clinics as incentives for study participation.
+
+### Individual Reports
+```bash
+python scripts/generate_individual_report.py
+```
+
+Creates personalized progress reports showing:
+- PHQ-9, GAD-7, WHO-5 score trajectories with severity bands
+- Change from baseline indicators
+- Notable improvements section with specific question-level changes
+
+### Clinic Reports
+```bash
+python scripts/generate_clinic_report.py
+```
+
+Creates quarterly clinic reports (Q2/Q4) showing:
+- Key metrics: total participants, response rates, remission rates
+- Comparison to study-wide averages
+- Score trajectories over time with confidence bands
+- MEQ-4 mystical experience distribution
 
 ## Documentation
 
