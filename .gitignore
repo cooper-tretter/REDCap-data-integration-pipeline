@@ -56,3 +56,6 @@ data/actual_insights.csv
 
 # Logs
 *.log
+
+# Email drafts (private)
+documentation/email_to_rick*.txt
