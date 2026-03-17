@@ -2,17 +2,37 @@
 
 This guide walks you through everything you need to enter, extract, and process data using the PATH Lab's REDCap integration pipeline. It also covers how to make changes to the pipeline if needed.
 
+**Prefer a point-and-click interface?** See [Web Interface (No Command Line)](#web-interface-no-command-line) below.
+
 ## Table of Contents
 
-1. [Setup](#1-setup)
-2. [Directory Structure](#2-directory-structure)
-3. [End-to-End Workflow: From REDCap Export to Analysis-Ready Data](#3-end-to-end-workflow-from-redcap-export-to-analysis-ready-data)
-4. [Generating Individual Participant Reports](#4-generating-individual-participant-reports)
-5. [Generating Clinic Quarterly Reports](#5-generating-clinic-quarterly-reports)
-6. [Understanding the Output](#6-understanding-the-output)
-7. [How to Make Changes](#7-how-to-make-changes)
-8. [Measures Reference](#8-measures-reference)
-9. [Troubleshooting](#9-troubleshooting)
+1. [Web Interface (No Command Line)](#web-interface-no-command-line)
+2. [Setup](#1-setup)
+3. [Directory Structure](#2-directory-structure)
+4. [End-to-End Workflow: From REDCap Export to Analysis-Ready Data](#3-end-to-end-workflow-from-redcap-export-to-analysis-ready-data)
+5. [Generating Individual Participant Reports](#4-generating-individual-participant-reports)
+6. [Generating Clinic Quarterly Reports](#5-generating-clinic-quarterly-reports)
+7. [Understanding the Output](#6-understanding-the-output)
+8. [How to Make Changes](#7-how-to-make-changes)
+9. [Measures Reference](#8-measures-reference)
+10. [Troubleshooting](#9-troubleshooting)
+
+---
+
+## Web Interface (No Command Line)
+
+If you prefer a point-and-click interface, the pipeline includes a web app. After setup, run:
+
+```bash
+streamlit run app.py
+```
+
+This opens a browser window where you can:
+- **Tab 1 — Data Integration:** Upload a REDCap export, click "Run Integration", and download the results
+- **Tab 2 — Individual Reports:** Select a participant and timepoint, click "Generate Report", and download the PDF
+- **Tab 3 — Clinic Reports:** Select a clinic and report type, click "Generate", and download the PDF
+
+No other command-line knowledge needed after this initial launch.
 
 ---
 
