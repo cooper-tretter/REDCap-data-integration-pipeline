@@ -3,7 +3,7 @@ Individual Participant Report Generator
 =======================================
 
 Generates personalized PDF reports for study participants showing their
-progress across timepoints with visualizations and interpretations.
+outcomes across timepoints with visualizations and interpretations.
 
 Uses PATH Lab branding:
 - Colors: #394F79 (primary), #253D6C (dark), #7E846F (sage), #FFEFDD (cream)
@@ -63,42 +63,33 @@ WHO5_SEVERITY = [
     (51, 100, 'Good Wellbeing', '#4A7C59'),
 ]
 
-# Standardized questionnaire items (for notable changes section)
-PHQ9_ITEMS = {
-    1: "Little interest or pleasure in doing things",
-    2: "Feeling down, depressed, or hopeless",
-    3: "Trouble falling or staying asleep, or sleeping too much",
-    4: "Feeling tired or having little energy",
-    5: "Poor appetite or overeating",
-    6: "Feeling bad about yourself",
-    7: "Trouble concentrating on things",
-    8: "Moving or speaking slowly (or being fidgety/restless)",
-    9: "Thoughts of self-harm",
-}
-
-GAD7_ITEMS = {
-    1: "Feeling nervous, anxious, or on edge",
-    2: "Not being able to stop or control worrying",
-    3: "Worrying too much about different things",
-    4: "Trouble relaxing",
-    5: "Being so restless it's hard to sit still",
-    6: "Becoming easily annoyed or irritable",
-    7: "Feeling afraid something awful might happen",
-}
-
-WHO5_ITEMS = {
-    1: "I have felt cheerful and in good spirits",
-    2: "I have felt calm and relaxed",
-    3: "I have felt active and vigorous",
-    4: "I woke up feeling fresh and rested",
-    5: "My daily life has been filled with things that interest me",
-}
-
-# Item score ranges
-ITEM_RANGES = {
-    'phq9': (0, 3),  # 0-3 scale
-    'gad7': (0, 3),  # 0-3 scale
-    'who5': (0, 5),  # 0-5 scale (raw, before x4)
+# Published norms for acute experience measures
+# MEQ-4: Complete mystical experience threshold >= 3.0 (Griffiths et al., 2006, 2011)
+# Published study norms (Barrett et al., 2015; Davis et al., 2020)
+ACUTE_NORMS = {
+    'meq4': {
+        'name': 'Mystical Experience (MEQ-4)',
+        'range': (0, 5),
+        'scoring': 'mean',
+        'complete_threshold': 3.0,
+        'complete_label': 'Complete Mystical Experience',
+        'published_mean': 3.5,
+        'published_source': 'Barrett et al., 2015',
+    },
+    'ceq': {
+        'name': 'Challenging Experience (CEQ-7)',
+        'range': (0, 35),
+        'scoring': 'sum',
+        'published_mean': 14.0,
+        'published_source': 'Barrett et al., 2016',
+    },
+    'piq': {
+        'name': 'Psychological Insight (PIQ)',
+        'range': (23, 115),
+        'scoring': 'sum',
+        'published_mean': 80.0,
+        'published_source': 'Peill et al., 2022',
+    },
 }
 
 
@@ -120,7 +111,7 @@ def setup_figure_style():
     plt.rcParams['axes.facecolor'] = COLORS['white']
 
 
-def create_header(fig, participant_id, report_type, report_date, clinic_name='Example Clinic', logo_dir=None):
+def create_header(fig, participant_id, report_type, report_date, logo_dir=None):
     """Create report header with PATH Lab branding and logo."""
     header_ax = fig.add_axes([0, 0.92, 1, 0.08])
     header_ax.set_facecolor(COLORS['cream'])
@@ -139,11 +130,9 @@ def create_header(fig, participant_id, report_type, report_date, clinic_name='Ex
             pass
 
     # Report info on right
-    header_ax.text(0.97, 0.70, f'{report_type} Progress Report', fontsize=12,
+    header_ax.text(0.97, 0.70, f'{report_type} Outcomes Report', fontsize=12,
                    color=COLORS['primary'], va='center', ha='right', fontweight='bold')
-    header_ax.text(0.97, 0.45, f'{clinic_name}', fontsize=9,
-                   color=COLORS['primary'], va='center', ha='right')
-    header_ax.text(0.97, 0.20, f'Participant: {participant_id}  |  {report_date}', fontsize=8,
+    header_ax.text(0.97, 0.35, f'Participant: {participant_id}  |  {report_date}', fontsize=8,
                    color=COLORS['dark'], va='center', ha='right')
 
 
@@ -180,9 +169,13 @@ def create_footer_with_logos(fig, logo_dir):
                    ha='center', va='center', fontsize=6, color=COLORS['sage'], style='italic')
 
 
-def create_score_chart(ax, timepoints, scores, scale_name, y_range, severity_bands):
-    """Create a line chart showing score progression with severity bands."""
-    valid_data = [(tp, score) for tp, score in zip(timepoints, scores) if not pd.isna(score)]
+def create_score_chart(ax, show_timepoints, scores, scale_name, y_range, severity_bands):
+    """Create a line chart showing score progression with severity bands.
+
+    Only shows x-axis ticks for timepoints the participant has reached.
+    Numeric values on left y-axis, severity labels on right.
+    """
+    valid_data = [(tp, score) for tp, score in zip(show_timepoints, scores) if not pd.isna(score)]
     if not valid_data:
         ax.text(0.5, 0.5, 'No data available', ha='center', va='center',
                 fontsize=12, color=COLORS['sage'])
@@ -190,7 +183,8 @@ def create_score_chart(ax, timepoints, scores, scale_name, y_range, severity_ban
         return
 
     tps, vals = zip(*valid_data)
-    x_positions = [list(TIMEPOINT_LABELS.keys()).index(tp) for tp in tps]
+    # Only use timepoints in show_timepoints for x positions
+    x_positions = [show_timepoints.index(tp) for tp in tps]
 
     # Draw severity bands (simple fills, no outlines)
     for low, high, label, color in severity_bands:
@@ -206,22 +200,31 @@ def create_score_chart(ax, timepoints, scores, scale_name, y_range, severity_ban
                     xytext=(0, 10), ha='center', fontsize=10, fontweight='bold',
                     color=COLORS['dark'])
 
-    # Formatting with y-axis severity labels
-    ax.set_xlim(-0.5, len(TIMEPOINT_LABELS) - 0.5)
+    # X-axis: only show timepoints participant has reached
+    ax.set_xlim(-0.5, len(show_timepoints) - 0.5)
     ax.set_ylim(y_range)
-    ax.set_xticks(range(len(TIMEPOINT_LABELS)))
-    ax.set_xticklabels(list(TIMEPOINT_LABELS.values()), fontsize=8)
+    ax.set_xticks(range(len(show_timepoints)))
+    ax.set_xticklabels([TIMEPOINT_LABELS[tp] for tp in show_timepoints], fontsize=8)
     ax.set_title(scale_name, fontweight='bold', color=COLORS['dark'], pad=8)
 
-    # Y-axis with severity labels instead of legend
+    # Left y-axis: numeric values
+    ax.yaxis.set_visible(True)
+    ax.tick_params(axis='y', labelsize=8)
+
+    # Right y-axis: severity labels
+    ax2 = ax.twinx()
+    ax2.set_ylim(y_range)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
     y_ticks = []
     y_labels = []
     for low, high, label, color in severity_bands:
         mid = (low + high) / 2
         y_ticks.append(mid)
         y_labels.append(label)
-    ax.set_yticks(y_ticks)
-    ax.set_yticklabels(y_labels, fontsize=7)
+    ax2.set_yticks(y_ticks)
+    ax2.set_yticklabels(y_labels, fontsize=7, color=COLORS['sage'])
+    ax2.tick_params(axis='y', length=0)
 
     ax.grid(True, axis='y', alpha=0.2, color=COLORS['sage'])
 
@@ -271,82 +274,67 @@ def create_change_summary(ax, baseline, current, label, higher_is_worse=True):
             color=color, fontweight='bold')
 
 
-def find_notable_item_changes(participant, measure, items_dict, item_range,
-                               baseline_tp='bl', current_tp='1mo', only_positive=True):
-    """
-    Find items where participant had drastic positive change (top 75% to bottom 25% or vice versa).
-
-    Returns list of tuples: (item_num, question_text, baseline_score, current_score, improved)
-    Only returns improvements by default.
-    """
-    notable = []
-    min_score, max_score = item_range
-    score_range = max_score - min_score
-
-    # Thresholds: top 25% and bottom 25%
-    low_threshold = min_score + 0.25 * score_range
-    high_threshold = min_score + 0.75 * score_range
-
-    for item_num, question in items_dict.items():
-        bl_col = f'{measure}_{item_num}_{baseline_tp}'
-        curr_col = f'{measure}_{item_num}_{current_tp}'
-
-        bl_score = participant.get(bl_col, np.nan)
-        curr_score = participant.get(curr_col, np.nan)
-
-        if pd.isna(bl_score) or pd.isna(curr_score):
-            continue
-
-        # Check for drastic change
-        was_high = bl_score >= high_threshold
-        was_low = bl_score <= low_threshold
-        now_high = curr_score >= high_threshold
-        now_low = curr_score <= low_threshold
-
-        # Determine if this is improvement
-        # For PHQ9/GAD7: lower is better. For WHO5: higher is better
-        if measure in ['phq9', 'gad7']:
-            improved = curr_score < bl_score
-            is_positive_drastic = was_high and now_low  # High symptoms -> low symptoms
-        else:
-            improved = curr_score > bl_score
-            is_positive_drastic = was_low and now_high  # Low wellbeing -> high wellbeing
-
-        if is_positive_drastic and (not only_positive or improved):
-            notable.append((item_num, question, bl_score, curr_score, improved))
-
-    return notable
-
-
-def create_notable_changes_section(ax, notable_changes, measure_name, higher_is_worse=True):
-    """Create a section showing notable item-level changes."""
+def create_acute_bar(ax, participant_score, measure_key, norm_info):
+    """Create a horizontal bar for an acute experience measure with published norm comparison."""
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis('off')
 
-    if not notable_changes:
+    score_min, score_max = norm_info['range']
+    name = norm_info['name']
+    published_mean = norm_info.get('published_mean')
+    published_source = norm_info.get('published_source', '')
+
+    if pd.isna(participant_score):
+        ax.text(0.5, 0.5, f'{name}\nNo data', ha='center', va='center',
+                fontsize=10, color=COLORS['sage'])
         return
 
-    y_pos = 0.9
-    ax.text(0, y_pos, f'Notable Changes in {measure_name}:', fontsize=9,
-            fontweight='bold', color=COLORS['dark'], va='top')
+    # Normalize score to 0-1 for bar width
+    normalized = (participant_score - score_min) / (score_max - score_min)
+    normalized = max(0, min(1, normalized))
 
-    y_pos -= 0.15
-    for item_num, question, bl_score, curr_score, improved in notable_changes[:2]:  # Max 2 items
-        color = COLORS['success'] if improved else COLORS['danger']
-        arrow = '\u2193' if (higher_is_worse and curr_score < bl_score) or \
-                           (not higher_is_worse and curr_score > bl_score) else '\u2191'
+    bar_left = 0.25
+    bar_width = 0.70
+    bar_bottom = 0.30
+    bar_height = 0.20
 
-        # Truncate question if too long
-        if len(question) > 50:
-            question = question[:47] + '...'
+    # Background bar
+    ax.fill([bar_left, bar_left + bar_width, bar_left + bar_width, bar_left],
+            [bar_bottom, bar_bottom, bar_bottom + bar_height, bar_bottom + bar_height],
+            color=COLORS['light_gray'], alpha=0.5)
 
-        ax.text(0.02, y_pos, f'"{question}"', fontsize=8,
-                color=COLORS['dark'], va='top', style='italic')
-        y_pos -= 0.12
-        ax.text(0.02, y_pos, f'{arrow} {bl_score:.0f} \u2192 {curr_score:.0f}',
-                fontsize=9, color=color, fontweight='bold', va='top')
-        y_pos -= 0.18
+    # Score bar
+    ax.fill([bar_left, bar_left + bar_width * normalized, bar_left + bar_width * normalized, bar_left],
+            [bar_bottom, bar_bottom, bar_bottom + bar_height, bar_bottom + bar_height],
+            color=COLORS['primary'], alpha=0.7)
+
+    # Published norm line
+    if published_mean is not None:
+        norm_x = bar_left + bar_width * ((published_mean - score_min) / (score_max - score_min))
+        ax.plot([norm_x, norm_x], [bar_bottom - 0.05, bar_bottom + bar_height + 0.05],
+                color=COLORS['sage'], linewidth=2, linestyle='--')
+        ax.text(norm_x, bar_bottom - 0.12, f'Published avg\n({published_source})',
+                ha='center', va='top', fontsize=6, color=COLORS['sage'])
+
+    # Complete mystical threshold (MEQ only)
+    if 'complete_threshold' in norm_info:
+        thresh = norm_info['complete_threshold']
+        thresh_x = bar_left + bar_width * ((thresh - score_min) / (score_max - score_min))
+        ax.plot([thresh_x, thresh_x], [bar_bottom - 0.05, bar_bottom + bar_height + 0.05],
+                color=COLORS['success'], linewidth=2, linestyle=':')
+        is_complete = participant_score >= thresh
+        label = norm_info['complete_label']
+        ax.text(thresh_x, bar_bottom + bar_height + 0.12,
+                f'{label}: {"Yes" if is_complete else "No"}',
+                ha='center', va='bottom', fontsize=7,
+                color=COLORS['success'] if is_complete else COLORS['sage'],
+                fontweight='bold')
+
+    # Title and score
+    ax.text(0.0, 0.85, name, fontsize=10, fontweight='bold', color=COLORS['dark'], va='center')
+    ax.text(0.0, 0.55, f'Score: {participant_score:.1f}', fontsize=11,
+            color=COLORS['primary'], fontweight='bold', va='center')
 
 
 def generate_individual_report(df, participant_id, timepoint, output_path,
@@ -365,7 +353,7 @@ def generate_individual_report(df, participant_id, timepoint, output_path,
     output_path : Path
         Where to save the PDF
     clinic_name : str
-        Name of the clinic for the report header
+        Name of the clinic (kept for API compatibility, not shown in report)
     study_averages : dict, optional
         Average scores across the study for comparison
     """
@@ -376,151 +364,116 @@ def generate_individual_report(df, participant_id, timepoint, output_path,
         raise ValueError(f"Participant {participant_id} not found")
     participant = participant.iloc[0]
 
-    # Determine timepoints to show
+    # Determine timepoints to show (only up to current timepoint)
+    all_outcome_timepoints = ['bl', '1mo', '3mo', '6mo', '12mo']
     timepoint_map = {
-        '1mo': (['bl', '3d', '1mo'], '1-Month'),
-        '3mo': (['bl', '3d', '1mo', '3mo'], '3-Month'),
-        '6mo': (['bl', '3d', '1mo', '3mo', '6mo'], '6-Month'),
-        '12mo': (list(TIMEPOINT_LABELS.keys()), '12-Month'),
+        '1mo': (['bl', '1mo'], '1-Month'),
+        '3mo': (['bl', '1mo', '3mo'], '3-Month'),
+        '6mo': (['bl', '1mo', '3mo', '6mo'], '6-Month'),
+        '12mo': (all_outcome_timepoints, '12-Month'),
     }
     show_timepoints, report_title = timepoint_map.get(timepoint, timepoint_map['12mo'])
     report_date = datetime.now().strftime('%B %d, %Y')
     logo_dir = Path(output_path).parent
 
-    # Find notable item changes
-    phq9_notable = find_notable_item_changes(participant, 'phq9', PHQ9_ITEMS,
-                                              ITEM_RANGES['phq9'], 'bl', timepoint)
-    gad7_notable = find_notable_item_changes(participant, 'gad7', GAD7_ITEMS,
-                                              ITEM_RANGES['gad7'], 'bl', timepoint)
-    who5_notable = find_notable_item_changes(participant, 'who5', WHO5_ITEMS,
-                                              ITEM_RANGES['who5'], 'bl', timepoint)
-
-    has_notable = phq9_notable or gad7_notable or who5_notable
-
-    # Create figure
-    fig = plt.figure(figsize=(8.5, 11))
-    create_header(fig, f'ID-{participant_id:04d}', report_title, report_date, clinic_name, logo_dir)
+    # === PAGE 1: Clinical Outcomes ===
+    fig1 = plt.figure(figsize=(8.5, 11))
+    create_header(fig1, f'ID-{participant_id:04d}', report_title, report_date, logo_dir)
 
     # Introduction
-    intro_ax = fig.add_axes([0.05, 0.86, 0.9, 0.05])
+    intro_ax = fig1.add_axes([0.05, 0.86, 0.9, 0.05])
     intro_ax.axis('off')
     intro_text = (
-        f"This report summarizes your progress in the PATH Lab Psilocybin Therapy Study through "
+        f"This report summarizes your outcomes in the PATH Lab Psilocybin Therapy Study through "
         f"your {report_title.lower()} follow-up."
     )
     intro_ax.text(0, 0.5, intro_text, fontsize=9, color=COLORS['dark'], va='center')
 
-    # Layout adjustments based on whether we have notable changes
-    # Footer is 0.06 tall, so content starts at 0.07
-    if has_notable:
-        chart_height = 0.15
-        phq9_bottom = 0.66
-        gad7_bottom = 0.46
-        who5_bottom = 0.26
-        notable_bottom = 0.07
-    else:
-        chart_height = 0.18
-        phq9_bottom = 0.62
-        gad7_bottom = 0.40
-        who5_bottom = 0.18
+    chart_height = 0.20
+    # Lead with WHO-5 (wellbeing), then PHQ-9, then GAD-7
+    who5_bottom = 0.62
+    phq9_bottom = 0.38
+    gad7_bottom = 0.14
+
+    # === WHO-5 Section (first — wellbeing is relevant across individuals) ===
+    who5_scores = [participant.get(f'who5_total_{tp}', np.nan) for tp in show_timepoints]
+    ax_who5 = fig1.add_axes([0.08, who5_bottom, 0.58, chart_height])
+    create_score_chart(ax_who5, show_timepoints, who5_scores,
+                       'Wellbeing (WHO-5)', (0, 100), WHO5_SEVERITY)
+
+    ax_who5_change = fig1.add_axes([0.72, who5_bottom + 0.02, 0.24, chart_height - 0.04])
+    baseline_who5 = participant.get('who5_total_bl', np.nan)
+    current_who5 = participant.get(f'who5_total_{timepoint}', np.nan)
+    create_change_summary(ax_who5_change, baseline_who5, current_who5, 'WHO-5', higher_is_worse=False)
 
     # === PHQ-9 Section ===
     phq9_scores = [participant.get(f'phq9_total_{tp}', np.nan) for tp in show_timepoints]
-    ax_phq9 = fig.add_axes([0.08, phq9_bottom, 0.60, chart_height])
+    ax_phq9 = fig1.add_axes([0.08, phq9_bottom, 0.58, chart_height])
     create_score_chart(ax_phq9, show_timepoints, phq9_scores,
                        'Depression (PHQ-9)', (0, 27), PHQ9_SEVERITY)
 
-    ax_phq9_change = fig.add_axes([0.72, phq9_bottom + 0.02, 0.24, chart_height - 0.04])
+    ax_phq9_change = fig1.add_axes([0.72, phq9_bottom + 0.02, 0.24, chart_height - 0.04])
     baseline_phq9 = participant.get('phq9_total_bl', np.nan)
     current_phq9 = participant.get(f'phq9_total_{timepoint}', np.nan)
     create_change_summary(ax_phq9_change, baseline_phq9, current_phq9, 'PHQ-9', higher_is_worse=True)
 
     # === GAD-7 Section ===
     gad7_scores = [participant.get(f'gad7_total_{tp}', np.nan) for tp in show_timepoints]
-    ax_gad7 = fig.add_axes([0.08, gad7_bottom, 0.60, chart_height])
+    ax_gad7 = fig1.add_axes([0.08, gad7_bottom, 0.58, chart_height])
     create_score_chart(ax_gad7, show_timepoints, gad7_scores,
                        'Anxiety (GAD-7)', (0, 21), GAD7_SEVERITY)
 
-    ax_gad7_change = fig.add_axes([0.72, gad7_bottom + 0.02, 0.24, chart_height - 0.04])
+    ax_gad7_change = fig1.add_axes([0.72, gad7_bottom + 0.02, 0.24, chart_height - 0.04])
     baseline_gad7 = participant.get('gad7_total_bl', np.nan)
     current_gad7 = participant.get(f'gad7_total_{timepoint}', np.nan)
     create_change_summary(ax_gad7_change, baseline_gad7, current_gad7, 'GAD-7', higher_is_worse=True)
 
-    # === WHO-5 Section ===
-    who5_scores = [participant.get(f'who5_total_{tp}', np.nan) for tp in show_timepoints]
-    ax_who5 = fig.add_axes([0.08, who5_bottom, 0.60, chart_height])
-    create_score_chart(ax_who5, show_timepoints, who5_scores,
-                       'Wellbeing (WHO-5)', (0, 100), WHO5_SEVERITY)
-
-    ax_who5_change = fig.add_axes([0.72, who5_bottom + 0.02, 0.24, chart_height - 0.04])
-    baseline_who5 = participant.get('who5_total_bl', np.nan)
-    current_who5 = participant.get(f'who5_total_{timepoint}', np.nan)
-    create_change_summary(ax_who5_change, baseline_who5, current_who5, 'WHO-5', higher_is_worse=False)
-
-    # === Notable Changes Section ===
-    if has_notable:
-        notable_ax = fig.add_axes([0.05, notable_bottom, 0.9, 0.16])
-        notable_ax.set_xlim(0, 1)
-        notable_ax.set_ylim(0, 1)
-        notable_ax.axis('off')
-
-        # Section header
-        notable_ax.fill([0, 1, 1, 0], [0.85, 0.85, 1, 1], color=COLORS['cream'])
-        notable_ax.text(0.02, 0.92, 'Notable Improvements', fontsize=11,
-                       fontweight='bold', color=COLORS['dark'], va='center')
-
-        # Display notable changes in columns
-        col_width = 0.32
-        col_positions = [0.02, 0.35, 0.68]
-
-        # (measure_name, notable_changes, higher_is_worse, max_score)
-        all_notable = [
-            ('Depression', phq9_notable, True, 3),
-            ('Anxiety', gad7_notable, True, 3),
-            ('Wellbeing', who5_notable, False, 5),
-        ]
-
-        for i, (measure_name, changes, higher_is_worse, max_score) in enumerate(all_notable):
-            if not changes:
-                continue
-            x_start = col_positions[i]
-            y_pos = 0.75
-
-            notable_ax.text(x_start, y_pos, f'{measure_name}:', fontsize=9,
-                           fontweight='bold', color=COLORS['primary'], va='top')
-            y_pos -= 0.12
-
-            for item_num, question, bl_score, curr_score, improved in changes[:1]:
-                color = COLORS['success']  # Only showing positive changes
-
-                # Show full question with text wrapping
-                notable_ax.text(x_start, y_pos, f'"{question}"', fontsize=7,
-                               color=COLORS['dark'], va='top', style='italic')
-                y_pos -= 0.25
-
-                if higher_is_worse:
-                    arrow = '\u2193'  # Down arrow for PHQ9/GAD7 improvement
-                else:
-                    arrow = '\u2191'  # Up arrow for WHO5 improvement
-
-                # Show scores with "out of X" below each number
-                notable_ax.text(x_start, y_pos, f'{bl_score:.0f}', fontsize=12,
-                               color=color, fontweight='bold', va='top', ha='left')
-                notable_ax.text(x_start, y_pos - 0.08, f'out of {max_score}', fontsize=6,
-                               color=COLORS['sage'], va='top', ha='left')
-                notable_ax.text(x_start + 0.06, y_pos, f' {arrow} ', fontsize=12,
-                               color=color, fontweight='bold', va='top', ha='left')
-                notable_ax.text(x_start + 0.12, y_pos, f'{curr_score:.0f}', fontsize=12,
-                               color=color, fontweight='bold', va='top', ha='left')
-                notable_ax.text(x_start + 0.12, y_pos - 0.08, f'out of {max_score}', fontsize=6,
-                               color=COLORS['sage'], va='top', ha='left')
-
     # Footer with logos
-    create_footer_with_logos(fig, logo_dir)
+    create_footer_with_logos(fig1, logo_dir)
 
-    plt.savefig(output_path, format='pdf', bbox_inches='tight', dpi=150,
-                facecolor=COLORS['white'])
-    plt.close()
+    # === PAGE 2: Acute Experience ===
+    fig2 = plt.figure(figsize=(8.5, 11))
+    create_header(fig2, f'ID-{participant_id:04d}', report_title, report_date, logo_dir)
+
+    # Intro
+    acute_intro = fig2.add_axes([0.05, 0.86, 0.9, 0.05])
+    acute_intro.axis('off')
+    acute_intro.text(0, 0.5,
+                     'Your acute dosing session experience, compared to published study norms.',
+                     fontsize=9, color=COLORS['dark'], va='center')
+
+    # Section title
+    acute_title = fig2.add_axes([0.05, 0.80, 0.9, 0.04])
+    acute_title.axis('off')
+    acute_title.text(0, 0.5, 'Acute Experience Measures', fontsize=14, fontweight='bold',
+                     color=COLORS['dark'], va='center')
+
+    # MEQ-4
+    meq_col = 'meq4_mean_3d' if 'meq4_mean_3d' in df.columns else 'meq4_total_3d'
+    meq_score = participant.get(meq_col, np.nan)
+    ax_meq = fig2.add_axes([0.05, 0.58, 0.9, 0.20])
+    create_acute_bar(ax_meq, meq_score, 'meq4', ACUTE_NORMS['meq4'])
+
+    # CEQ
+    ceq_score = participant.get('ceq_total_3d', np.nan)
+    ax_ceq = fig2.add_axes([0.05, 0.36, 0.9, 0.20])
+    create_acute_bar(ax_ceq, ceq_score, 'ceq', ACUTE_NORMS['ceq'])
+
+    # PIQ
+    piq_score = participant.get('piq_total_3d', np.nan)
+    ax_piq = fig2.add_axes([0.05, 0.14, 0.9, 0.20])
+    create_acute_bar(ax_piq, piq_score, 'piq', ACUTE_NORMS['piq'])
+
+    create_footer_with_logos(fig2, logo_dir)
+
+    # Save both pages to PDF
+    with PdfPages(output_path) as pdf:
+        pdf.savefig(fig1, bbox_inches='tight', dpi=150,
+                    facecolor=COLORS['white'], edgecolor='none')
+        pdf.savefig(fig2, bbox_inches='tight', dpi=150,
+                    facecolor=COLORS['white'], edgecolor='none')
+
+    plt.close('all')
 
     print(f"Generated report: {output_path}")
     return output_path

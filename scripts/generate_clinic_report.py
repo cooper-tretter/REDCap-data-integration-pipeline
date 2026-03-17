@@ -37,8 +37,11 @@ COLORS = {
 PHQ9_RESPONSE_THRESHOLD = 0.50  # 50% reduction = response
 PHQ9_REMISSION_THRESHOLD = 5    # Score < 5 = remission
 GAD7_RESPONSE_THRESHOLD = 0.50
-GAD7_REMISSION_THRESHOLD = 5
-WHO5_CLINICALLY_LOW = 28        # Suggests depression screening
+GAD7_REMISSION_THRESHOLD = 5    # Score < 5 = remission (Spitzer et al., 2006)
+WHO5_CSI_THRESHOLD = 10         # Clinically significant improvement: >= 10 point increase (Topp et al., 2015)
+
+# CSQ-8 range: 8-32, higher = more satisfied
+CSQ8_RANGE = (8, 32)
 
 # Timepoint labels
 TIMEPOINT_LABELS = {
@@ -131,9 +134,11 @@ def create_footer(fig, logo_dir=None):
 def calculate_clinic_metrics(df, timepoint='1mo'):
     """Calculate key clinic metrics."""
     metrics = {}
+    tp_label = TIMEPOINT_LABELS.get(timepoint, timepoint)
 
     # Sample size
     metrics['n_total'] = len(df)
+    metrics['timepoint_label'] = tp_label
 
     # Calculate response and remission rates for PHQ-9
     has_bl_phq9 = df['phq9_total_bl'].notna()
@@ -184,7 +189,7 @@ def calculate_clinic_metrics(df, timepoint='1mo'):
         metrics['gad7_remission_rate'] = np.nan
         metrics['gad7_mean_change'] = np.nan
 
-    # WHO-5 improvement
+    # WHO-5: Clinically Significant Improvement (>= 10 point increase on 0-100 scale)
     has_bl_who5 = df['who5_total_bl'].notna()
     has_tp_who5 = df[f'who5_total_{timepoint}'].notna()
     has_both_who5 = has_bl_who5 & has_tp_who5
@@ -194,15 +199,15 @@ def calculate_clinic_metrics(df, timepoint='1mo'):
         bl_scores = subset['who5_total_bl']
         tp_scores = subset[f'who5_total_{timepoint}']
 
-        # Clinically meaningful improvement (10+ points)
+        # Clinically significant improvement (>= 10 points, Topp et al., 2015)
         improvement = tp_scores - bl_scores
-        metrics['who5_improved_rate'] = (improvement >= 10).mean() * 100
+        metrics['who5_csi_rate'] = (improvement >= WHO5_CSI_THRESHOLD).mean() * 100
         metrics['who5_response_n'] = has_both_who5.sum()
         metrics['who5_mean_change'] = improvement.mean()
         metrics['who5_mean_bl'] = bl_scores.mean()
         metrics['who5_mean_tp'] = tp_scores.mean()
     else:
-        metrics['who5_improved_rate'] = np.nan
+        metrics['who5_csi_rate'] = np.nan
         metrics['who5_mean_change'] = np.nan
 
     # MEQ scores (mystical experience at 3d)
@@ -210,10 +215,23 @@ def calculate_clinic_metrics(df, timepoint='1mo'):
         meq_scores = df['meq4_total_3d'].dropna()
         if len(meq_scores) > 0:
             metrics['meq_mean'] = meq_scores.mean()
-            metrics['meq_complete_rate'] = (meq_scores >= 3.0).mean() * 100  # Complete mystical = mean >= 3
+            metrics['meq_complete_rate'] = (meq_scores >= 3.0).mean() * 100
             metrics['meq_n'] = len(meq_scores)
         else:
             metrics['meq_mean'] = np.nan
+
+    # CSQ-8 Client Satisfaction (at 1mo)
+    csq_col = 'csq8_total_1mo'
+    if csq_col in df.columns:
+        csq_scores = df[csq_col].dropna()
+        if len(csq_scores) > 0:
+            metrics['csq8_mean'] = csq_scores.mean()
+            metrics['csq8_median'] = csq_scores.median()
+            metrics['csq8_n'] = len(csq_scores)
+            # Proportion scoring >= 24 (satisfied or very satisfied)
+            metrics['csq8_satisfied_rate'] = (csq_scores >= 24).mean() * 100
+        else:
+            metrics['csq8_mean'] = np.nan
 
     return metrics
 
@@ -237,13 +255,13 @@ def create_kpi_card(ax, value, label, subtitle='', color=COLORS['primary'], is_p
     elif is_percent:
         value_str = f'{value:.0f}%'
     else:
-        value_str = f'{int(value)}'
+        value_str = f'{value:.1f}' if isinstance(value, float) else f'{int(value)}'
 
     ax.text(0.5, 0.65, value_str, fontsize=24, fontweight='bold',
             ha='center', va='center', color=color)
 
     # Label
-    ax.text(0.5, 0.30, label, fontsize=10, fontweight='bold',
+    ax.text(0.5, 0.30, label, fontsize=9, fontweight='bold',
             ha='center', va='center', color=COLORS['dark'])
 
     if subtitle:
@@ -426,6 +444,7 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
 
     report_date = datetime.now().strftime('%B %Y')
     logo_dir = Path(output_path).parent
+    tp_label = TIMEPOINT_LABELS.get(primary_timepoint, primary_timepoint)
 
     # Calculate metrics
     clinic_metrics = calculate_clinic_metrics(df, primary_timepoint)
@@ -441,7 +460,7 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
     summary_text = (
         f"This report summarizes outcomes for {clinic_name} "
         f"in the PATH Lab Psilocybin Therapy Study. Data reflects assessments through the "
-        f"{TIMEPOINT_LABELS.get(primary_timepoint, primary_timepoint)} follow-up timepoint."
+        f"{tp_label} follow-up timepoint."
     )
     summary_ax.text(0, 0.7, summary_text, fontsize=10, color=COLORS['dark'],
                     wrap=True, va='top', ha='left')
@@ -452,59 +471,72 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
     kpi_title.text(0, 0.5, 'Key Metrics', fontsize=14, fontweight='bold',
                    color=COLORS['dark'], va='center')
 
-    # KPI Cards - 4 cards now including total participants
-    ax_kpi0 = fig1.add_axes([0.05, 0.62, 0.21, 0.13])
+    # KPI Cards - 5 cards
+    card_width = 0.17
+    card_gap = 0.025
+    card_start = 0.05
+
+    ax_kpi0 = fig1.add_axes([card_start, 0.62, card_width, 0.13])
     create_kpi_card(ax_kpi0, clinic_metrics.get('n_total'),
-                    'Total Participants', '',
+                    'Total\nParticipants', '',
                     color=COLORS['dark'], is_percent=False)
 
-    ax_kpi1 = fig1.add_axes([0.28, 0.62, 0.21, 0.13])
+    ax_kpi1 = fig1.add_axes([card_start + (card_width + card_gap), 0.62, card_width, 0.13])
     create_kpi_card(ax_kpi1, clinic_metrics.get('phq9_response_rate'),
-                    'PHQ-9 Response', f'n={clinic_metrics.get("phq9_response_n", 0)}',
+                    f'PHQ-9 Response\n(at {tp_label})',
+                    f'n={clinic_metrics.get("phq9_response_n", 0)}',
                     color=COLORS['primary'])
 
-    ax_kpi2 = fig1.add_axes([0.51, 0.62, 0.21, 0.13])
+    ax_kpi2 = fig1.add_axes([card_start + 2 * (card_width + card_gap), 0.62, card_width, 0.13])
     create_kpi_card(ax_kpi2, clinic_metrics.get('gad7_response_rate'),
-                    'GAD-7 Response', f'n={clinic_metrics.get("gad7_response_n", 0)}',
+                    f'GAD-7 Response\n(at {tp_label})',
+                    f'n={clinic_metrics.get("gad7_response_n", 0)}',
                     color=COLORS['primary'])
 
-    ax_kpi3 = fig1.add_axes([0.74, 0.62, 0.21, 0.13])
-    create_kpi_card(ax_kpi3, clinic_metrics.get('who5_improved_rate'),
-                    'WHO-5 Improved', f'n={clinic_metrics.get("who5_response_n", 0)}',
+    ax_kpi3 = fig1.add_axes([card_start + 3 * (card_width + card_gap), 0.62, card_width, 0.13])
+    create_kpi_card(ax_kpi3, clinic_metrics.get('who5_csi_rate'),
+                    f'WHO-5 CSI\n(at {tp_label})',
+                    f'n={clinic_metrics.get("who5_response_n", 0)}',
                     color=COLORS['primary'])
 
-    # Section: Comparison to Study
+    ax_kpi4 = fig1.add_axes([card_start + 4 * (card_width + card_gap), 0.62, card_width, 0.13])
+    csq_mean = clinic_metrics.get('csq8_mean', np.nan)
+    create_kpi_card(ax_kpi4, csq_mean,
+                    'Client\nSatisfaction',
+                    f'CSQ-8 (n={clinic_metrics.get("csq8_n", 0)})',
+                    color=COLORS['primary'], is_percent=False)
+
+    # Section: Comparison to Study (with timepoint-specific labels)
     comp_title = fig1.add_axes([0.05, 0.54, 0.9, 0.04])
     comp_title.axis('off')
-    comp_title.text(0, 0.5, 'Comparison to Study Average', fontsize=14, fontweight='bold',
+    comp_title.text(0, 0.5, f'Comparison to Study Average (at {tp_label})', fontsize=14, fontweight='bold',
                     color=COLORS['dark'], va='center')
 
-    # Response rate comparisons
+    # Response rate comparisons — include timepoint in labels
     ax_comp1 = fig1.add_axes([0.05, 0.44, 0.42, 0.10])
     create_bar_comparison(ax_comp1, clinic_metrics.get('phq9_response_rate'),
                          study_metrics.get('phq9_response_rate'),
-                         'Depression Response Rate', higher_is_better=True)
+                         f'PHQ-9 Response Rate ({tp_label})', higher_is_better=True)
 
     ax_comp2 = fig1.add_axes([0.52, 0.44, 0.42, 0.10])
     create_bar_comparison(ax_comp2, clinic_metrics.get('gad7_response_rate'),
                          study_metrics.get('gad7_response_rate'),
-                         'Anxiety Response Rate', higher_is_better=True)
+                         f'GAD-7 Response Rate ({tp_label})', higher_is_better=True)
 
     ax_comp3 = fig1.add_axes([0.05, 0.32, 0.42, 0.10])
     create_bar_comparison(ax_comp3, clinic_metrics.get('phq9_remission_rate'),
                          study_metrics.get('phq9_remission_rate'),
-                         'Depression Remission Rate', higher_is_better=True)
+                         f'PHQ-9 Remission ({tp_label})', higher_is_better=True)
 
     ax_comp4 = fig1.add_axes([0.52, 0.32, 0.42, 0.10])
-    create_bar_comparison(ax_comp4, clinic_metrics.get('meq_complete_rate'),
-                         study_metrics.get('meq_complete_rate'),
-                         'Complete Mystical Experience', higher_is_better=True)
+    create_bar_comparison(ax_comp4, clinic_metrics.get('gad7_remission_rate'),
+                         study_metrics.get('gad7_remission_rate'),
+                         f'GAD-7 Remission ({tp_label})', higher_is_better=True)
 
     # Section: Score Change Summary
     change_title = fig1.add_axes([0.05, 0.24, 0.9, 0.04])
     change_title.axis('off')
-    change_title.text(0, 0.5, 'Average Score Changes (Baseline to ' +
-                      TIMEPOINT_LABELS.get(primary_timepoint, primary_timepoint) + ')',
+    change_title.text(0, 0.5, f'Average Score Changes (Baseline to {tp_label})',
                       fontsize=14, fontweight='bold', color=COLORS['dark'], va='center')
 
     # Score change summary table
@@ -524,7 +556,7 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
                clinic_metrics.get('who5_mean_change', np.nan)]
 
     # Table header
-    headers = ['Measure', 'Baseline', primary_timepoint.upper(), 'Change']
+    headers = ['Measure', 'Baseline', tp_label, 'Change']
     for i, h in enumerate(headers):
         table_ax.text(0.05 + i * 0.25, 0.85, h, fontsize=10, fontweight='bold',
                      color=COLORS['dark'], va='center')
@@ -557,27 +589,21 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
     fig2 = plt.figure(figsize=(8.5, 11))
     create_header(fig2, clinic_name, report_title, report_date, page_num=2, total_pages=2, logo_dir=logo_dir)
 
-    # Section title
-    traj_title = fig2.add_axes([0.05, 0.84, 0.9, 0.04])
-    traj_title.axis('off')
-    traj_title.text(0, 0.5, 'Score Trajectories Over Time', fontsize=14, fontweight='bold',
-                    color=COLORS['dark'], va='center')
-
-    # Trajectory charts
-    ax_traj1 = fig2.add_axes([0.08, 0.62, 0.38, 0.20])
+    # Trajectory charts at top of page 2
+    ax_traj1 = fig2.add_axes([0.08, 0.70, 0.38, 0.18])
     create_score_trajectory(ax_traj1, df, 'phq9', timepoints,
                            'PHQ-9 (Depression)', (0, 27))
 
-    ax_traj2 = fig2.add_axes([0.55, 0.62, 0.38, 0.20])
+    ax_traj2 = fig2.add_axes([0.55, 0.70, 0.38, 0.18])
     create_score_trajectory(ax_traj2, df, 'gad7', timepoints,
                            'GAD-7 (Anxiety)', (0, 21))
 
-    ax_traj3 = fig2.add_axes([0.08, 0.37, 0.38, 0.20])
+    ax_traj3 = fig2.add_axes([0.08, 0.48, 0.38, 0.18])
     create_score_trajectory(ax_traj3, df, 'who5', timepoints,
                            'WHO-5 (Wellbeing)', (0, 100))
 
     # Mystical experience distribution
-    ax_meq = fig2.add_axes([0.55, 0.37, 0.38, 0.20])
+    ax_meq = fig2.add_axes([0.55, 0.48, 0.38, 0.18])
     if 'meq4_total_3d' in df.columns:
         meq_scores = df['meq4_total_3d'].dropna()
         if len(meq_scores) > 0:
@@ -593,17 +619,57 @@ def generate_clinic_report(df, clinic_name, report_type, output_path, study_df=N
                        fontsize=11, color=COLORS['sage'], transform=ax_meq.transAxes)
     ax_meq.set_title('Mystical Experience (MEQ-4)', fontweight='bold', color=COLORS['dark'])
 
-    # Distribution section title
-    dist_title = fig2.add_axes([0.05, 0.30, 0.9, 0.04])
+    # Client Satisfaction section
+    sat_title = fig2.add_axes([0.05, 0.40, 0.9, 0.04])
+    sat_title.axis('off')
+    sat_title.text(0, 0.5, 'Client Satisfaction (CSQ-8)', fontsize=14, fontweight='bold',
+                   color=COLORS['dark'], va='center')
+
+    ax_sat = fig2.add_axes([0.08, 0.22, 0.38, 0.16])
+    csq_col = 'csq8_total_1mo'
+    if csq_col in df.columns:
+        csq_scores = df[csq_col].dropna()
+        if len(csq_scores) > 0:
+            ax_sat.hist(csq_scores, bins=12, color=COLORS['primary'], alpha=0.7,
+                       edgecolor=COLORS['dark'], range=(8, 32))
+            ax_sat.set_xlabel('CSQ-8 Score (8-32)', fontsize=9)
+            ax_sat.set_ylabel('Count', fontsize=9)
+            ax_sat.set_title(f'Satisfaction Distribution (n={len(csq_scores)})',
+                            fontweight='bold', color=COLORS['dark'], fontsize=10)
+            ax_sat.axvline(x=csq_scores.mean(), color=COLORS['success'], linestyle='--',
+                          linewidth=2, label=f'Mean: {csq_scores.mean():.1f}')
+            ax_sat.legend(fontsize=8)
+        else:
+            ax_sat.text(0.5, 0.5, 'No data', ha='center', va='center',
+                       fontsize=11, color=COLORS['sage'], transform=ax_sat.transAxes)
+            ax_sat.set_title('Satisfaction Distribution', fontweight='bold', color=COLORS['dark'], fontsize=10)
+    else:
+        ax_sat.text(0.5, 0.5, 'CSQ-8 not collected', ha='center', va='center',
+                   fontsize=11, color=COLORS['sage'], transform=ax_sat.transAxes)
+        ax_sat.set_title('Satisfaction Distribution', fontweight='bold', color=COLORS['dark'], fontsize=10)
+
+    # Satisfaction comparison to study
+    ax_sat_comp = fig2.add_axes([0.55, 0.22, 0.38, 0.16])
+    csq_clinic = clinic_metrics.get('csq8_mean', np.nan)
+    csq_study = study_metrics.get('csq8_mean', np.nan)
+    if not pd.isna(csq_clinic):
+        create_bar_comparison(ax_sat_comp, csq_clinic, csq_study,
+                             'Mean Satisfaction Score', is_percent=False, higher_is_better=True)
+    else:
+        ax_sat_comp.axis('off')
+        ax_sat_comp.text(0.5, 0.5, 'No satisfaction data', ha='center', va='center',
+                        fontsize=11, color=COLORS['sage'])
+
+    # Score Distributions
+    dist_title = fig2.add_axes([0.05, 0.16, 0.9, 0.04])
     dist_title.axis('off')
     dist_title.text(0, 0.5, 'Score Distributions by Timepoint', fontsize=14, fontweight='bold',
                     color=COLORS['dark'], va='center')
 
-    # Box plots
-    ax_box1 = fig2.add_axes([0.08, 0.10, 0.4, 0.18])
+    ax_box1 = fig2.add_axes([0.08, 0.07, 0.4, 0.08])
     create_distribution_chart(ax_box1, df, 'phq9', timepoints, 'PHQ-9')
 
-    ax_box2 = fig2.add_axes([0.55, 0.10, 0.4, 0.18])
+    ax_box2 = fig2.add_axes([0.55, 0.07, 0.4, 0.08])
     create_distribution_chart(ax_box2, df, 'gad7', timepoints, 'GAD-7')
 
     create_footer(fig2, logo_dir)
