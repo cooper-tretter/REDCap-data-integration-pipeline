@@ -21,18 +21,20 @@ This guide walks you through everything you need to enter, extract, and process 
 
 ## Web Interface (No Command Line)
 
-If you prefer a point-and-click interface, the pipeline includes a web app. After setup, run:
+If you prefer a point-and-click interface, the pipeline includes a web app. After [setup](#1-setup), run:
 
 ```bash
 streamlit run app.py
 ```
 
-This opens a browser window where you can:
+This opens a browser window (typically at `http://localhost:8501`) where you can:
 - **Tab 1 — Data Integration:** Upload a REDCap export, click "Run Integration", and download the results
 - **Tab 2 — Individual Reports:** Select a participant and timepoint, click "Generate Report", and download the PDF
 - **Tab 3 — Clinic Reports:** Select a clinic and report type, click "Generate", and download the PDF
 
 No other command-line knowledge needed after this initial launch.
+
+> **HIPAA Note:** This app runs entirely on your local machine. No participant data is sent to any external server or the internet. The `localhost` URL in your browser is a local address — it is not accessible to anyone else.
 
 ---
 
